@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEURAL·3D 实时神经网络可视化实验室</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg:#04050d; --panel:rgba(12,16,34,.72); --line:rgba(120,160,255,.16);
+    --cyan:#22e4ff; --mag:#ff3bbd; --vio:#8b6cff; --txt:#dfe6ff; --dim:#7c87ad;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--txt);
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;overflow:hidden}
+  body{display:flex;flex-direction:column;
+    background:radial-gradient(ellipse at 20% 0%,#16133a 0%,transparent 55%),
+               radial-gradient(ellipse at 90% 100%,#0b2a3a 0%,transparent 50%),var(--bg)}
+  header{display:flex;align-items:center;gap:18px;padding:12px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .logo{font-family:Orbitron,sans-serif;font-weight:800;font-size:22px;letter-spacing:3px;
+    background:linear-gradient(90deg,var(--cyan),var(--vio),var(--mag));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{font-size:13px;color:var(--dim)}
+  .sub b{color:var(--txt);font-weight:500}
+  .chips{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font:11px "JetBrains Mono",monospace;padding:4px 9px;border:1px solid var(--line);border-radius:20px;color:#b9c4ec;background:rgba(255,255,255,.03)}
+  main{flex:1;display:grid;grid-template-columns:1.1fr 1fr;gap:10px;padding:10px 12px 0;min-height:0}
+  .view{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:rgba(5,8,20,.5);min-height:0}
+  .view canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+  .view canvas:active{cursor:grabbing}
+  .tag{position:absolute;left:14px;top:12px;pointer-events:none}
+  .tag h3{font-family:Orbitron,sans-serif;font-size:13px;letter-spacing:2px;color:var(--cyan)}
+  .tag p{font-size:12px;color:var(--dim);margin-top:3px}
+  .hint{position:absolute;right:12px;bottom:10px;font-size:11px;color:var(--dim);pointer-events:none}
+  .infer{position:absolute;left:14px;bottom:12px;font:12px "JetBrains Mono",monospace;color:#cfe;pointer-events:none;
+    background:rgba(0,0,0,.35);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  footer{display:grid;grid-template-columns:auto 1fr 1.2fr;gap:10px;padding:10px 12px 12px;height:250px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;backdrop-filter:blur(8px);min-width:0}
+  .card h4{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:1px;margin-bottom:8px;display:flex;justify-content:space-between}
+  #pad{width:190px;height:190px;border-radius:10px;cursor:crosshair;display:block;border:1px solid var(--line);touch-action:none}
+  .padrow{display:flex;gap:10px}
+  .padbtns{display:flex;flex-direction:column;gap:6px;width:92px}
+  button{font:inherit;font-size:12px;color:var(--txt);background:rgba(255,255,255,.05);border:1px solid var(--line);
+    border-radius:8px;padding:7px 8px;cursor:pointer;transition:.15s}
+  button:hover{border-color:rgba(140,180,255,.5);background:rgba(255,255,255,.09)}
+  button.on{border-color:var(--cyan);box-shadow:0 0 12px rgba(34,228,255,.35) inset}
+  button.mag.on{border-color:var(--mag);box-shadow:0 0 12px rgba(255,59,189,.35) inset}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+  .ctrl{display:flex;flex-direction:column;gap:9px}
+  .row{display:flex;gap:6px;flex-wrap:wrap}
+  .row button{flex:1}
+  .big{font-size:14px;padding:9px;font-weight:600}
+  #play.on{background:linear-gradient(90deg,rgba(34,228,255,.18),rgba(139,108,255,.18))}
+  label{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:8px}
+  label span{font:12px "JetBrains Mono",monospace;color:var(--txt);min-width:44px;text-align:right}
+  input[type=range]{flex:1;accent-color:var(--cyan)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+  .stat{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:7px 9px}
+  .stat small{font-size:11px;color:var(--dim);display:block}
+  .stat b{font:700 18px "JetBrains Mono",monospace}
+  #acc{color:var(--cyan)} #loss{color:var(--mag)}
+  #chart{width:100%;height:120px;display:block}
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:15px;color:var(--dim)}
+  @media (max-width:900px){
+    html,body{overflow:auto;height:auto}
+    main{grid-template-columns:1fr;grid-auto-rows:62vw}
+    footer{grid-template-columns:1fr;height:auto}
+    .chips{margin-left:0}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">NEURAL·3D</div>
+  <div class="sub"><b>实时神经网络可视化实验室</b> · 在浏览器里从零训练一个神经网络 —— 每根连线都是真实权重，每次闪光都是真实计算</div>
+  <div class="chips">
+    <span class="chip">JavaScript</span><span class="chip">Three.js / WebGL</span>
+    <span class="chip">手写反向传播</span><span class="chip">Adam 优化器</span><span class="chip">交互式前端</span>
+  </div>
+</header>
+
+<main>
+  <div class="view" id="netView">
+    <canvas id="net"></canvas>
+    <div class="tag"><h3>NEURAL NETWORK</h3><p id="arch">神经网络结构 · 2 → 10 → 10 → 1</p></div>
+    <div class="infer" id="infer">等待数据…</div>
+    <div class="hint">拖动旋转 · 滚轮缩放</div>
+  </div>
+  <div class="view" id="surfView">
+    <canvas id="surf"></canvas>
+    <div class="tag"><h3>DECISION SURFACE</h3><p>决策曲面 · AI 眼中的世界：高处判为青色，低处判为品红</p></div>
+    <div class="hint">拖动旋转 · 滚轮缩放</div>
+  </div>
+</main>
+
+<footer>
+  <div class="card">
+    <h4><span>① 喂数据：在这里点击 / 拖动画点</span></h4>
+    <div class="padrow">
+      <canvas id="pad"></canvas>
+      <div class="padbtns">
+        <button id="mC" class="on"><span class="dot" style="background:var(--cyan)"></span>青色类</button>
+        <button id="mM" class="mag"><span class="dot" style="background:var(--mag)"></span>品红类</button>
+        <button id="clear">清空数据</button>
+        <div style="font-size:11px;color:var(--dim);line-height:1.5">右键 = 画另一类</div>
+      </div>
+    </div>
+  </div>
+  <div class="card ctrl">
+    <h4><span>② 控制训练</span></h4>
+    <div class="row">
+      <button id="play" class="big on">⏸ 暂停训练</button>
+      <button id="reset" class="big">↺ 重置大脑</button>
+    </div>
+    <div class="row" id="sets">
+      <button data-s="spiral" class="on">螺旋</button>
+      <button data-s="ring">圆环</button>
+      <button data-s="xor">异或</button>
+      <button data-s="blobs">双簇</button>
+    </div>
+    <label>学习率<input type="range" id="lr" min="-3" max="-1" step="0.05" value="-2.1"><span id="lrv">0.008</span></label>
+    <label>隐藏神经元<input type="range" id="hid" min="3" max="16" step="1" value="10"><span id="hidv">10</span></label>
+  </div>
+  <div class="card">
+    <h4><span>③ 看它学习</span><span id="params" style="font-family:JetBrains Mono,monospace"></span></h4>
+    <div class="stats">
+      <div class="stat"><small>训练步数</small><b id="ep">0</b></div>
+      <div class="stat"><small>准确率</small><b id="acc">–</b></div>
+      <div class="stat"><small>损失 Loss</small><b id="loss">–</b></div>
+      <div class="stat"><small>样本数</small><b id="cnt">0</b></div>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+</footer>
+<div id="err">3D 引擎加载失败，请检查网络后刷新页面。</div>
+
+<script>
+if (typeof THREE === 'undefined') { document.getElementById('err').style.display='flex'; throw new Error('three missing'); }
+
+/* =========================================================
+   1. 从零实现的神经网络（MLP + tanh + sigmoid + Adam）
+   ========================================================= */
+const randn = () => { let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+let net, H = 10, lr = 0.008, stepCount = 0;
+
+function makeNet(sizes){
+  const W=[],b=[],mW=[],vW=[],mb=[],vb=[];
+  for(let l=0;l<sizes.length-1;l++){
+    const m=sizes[l], n=sizes[l+1], w=new Float32Array(n*m);
+    for(let i=0;i<w.length;i++) w[i]=randn()*Math.sqrt(1/m)*1.2;
+    W.push(w); b.push(new Float32Array(n));
+    mW.push(new Float32Array(n*m)); vW.push(new Float32Array(n*m));
+    mb.push(new Float32Array(n)); vb.push(new Float32Array(n));
+  }
+  return {sizes,W,b,mW,vW,mb,vb,t:0};
+}
+function forward(x,y){
+  const {sizes,W,b}=net, L=sizes.length-1, acts=[[x,y]];
+  let a=acts[0];
+  for(let l=0;l<L;l++){
+    const m=sizes[l], n=sizes[l+1], z=new Float32Array(n), w=W[l], bb=b[l];
+    for(let i=0;i<n;i++){ let s=bb[i]; for(let j=0;j<m;j++) s+=w[i*m+j]*a[j];
+      z[i]= l<L-1 ? Math.tanh(s) : 1/(1+Math.exp(-s)); }
+    acts.push(z); a=z;
+  }
+  return acts;
+}
+const predict=(x,y)=>forward(x,y)[net.sizes.length-1][0];
+
+function trainStep(){
+  const {sizes,W,b}=net, L=sizes.length-1, N=data.length;
+  const gW=W.map(w=>new Float32Array(w.length)), gb=b.map(v=>new Float32Array(v.length));
+  let loss=0, ok=0;
+  for(const d of data){
+    const acts=forward(d.x,d.y), p=acts[L][0];
+    loss += -(d.c*Math.log(p+1e-7)+(1-d.c)*Math.log(1-p+1e-7));
+    if((p>.5)===(d.c===1)) ok++;
+    let delta=[p-d.c];
+    for(let l=L-1;l>=0;l--){
+      const m=sizes[l], n=sizes[l+1], a=acts[l], w=W[l];
+      for(let i=0;i<n;i++){ gb[l][i]+=delta[i]; for(let j=0;j<m;j++) gW[l][i*m+j]+=delta[i]*a[j]; }
+      if(l>0){ const nd=new Float32Array(m);
+        for(let j=0;j<m;j++){ let s=0; for(let i=0;i<n;i++) s+=w[i*m+j]*delta[i]; nd[j]=s*(1-a[j]*a[j]); }
+        delta=nd; }
+    }
+  }
+  // Adam
+  net.t++; const b1=.9,b2=.999, c1=1-Math.pow(b1,net.t), c2=1-Math.pow(b2,net.t);
+  const upd=(P,G,M,V)=>{ for(let i=0;i<P.length;i++){ const g=G[i]/N;
+    M[i]=b1*M[i]+(1-b1)*g; V[i]=b2*V[i]+(1-b2)*g*g;
+    P[i]-=lr*(M[i]/c1)/(Math.sqrt(V[i]/c2)+1e-8); } };
+  for(let l=0;l<L;l++){ upd(W[l],gW[l],net.mW[l],net.vW[l]); upd(b[l],gb[l],net.mb[l],net.vb[l]); }
+  return {loss:loss/N, acc:ok/N};
+}
+
+/* =========================================================
+   2. 数据集
+   ========================================================= */
+let data=[];
+function genSet(kind){
+  data=[]; const R=Math.random, nz=s=>(R()-.5)*s;
+  if(kind==='spiral'){ const n=110;
+    for(let c=0;c<2;c++) for(let i=0;i<n;i++){ const r=i/n*.88+.06, t=1.6*i/n*2*Math.PI+c*Math.PI;
+      data.push({x:r*Math.cos(t)+nz(.06), y:r*Math.sin(t)+nz(.06), c}); } }
+  if(kind==='ring'){ for(let i=0;i<220;i++){ const inner=i%2, t=R()*Math.PI*2, r=inner? R()*.38 : .6+R()*.3;
+      data.push({x:r*Math.cos(t), y:r*Math.sin(t), c:inner}); } }
+  if(kind==='xor'){ for(let i=0;i<220;i++){ let x=(R()*2-1)*.9, y=(R()*2-1)*.9;
+      x+= x>0?.06:-.06; y+= y>0?.06:-.06; data.push({x,y,c:x*y>0?1:0}); } }
+  if(kind==='blobs'){ for(let i=0;i<200;i++){ const c=i%2;
+      data.push({x:(c?.45:-.45)+randn()*.2, y:(c?.35:-.35)+randn()*.2, c}); } }
+  data.forEach(d=>{d.x=Math.max(-1,Math.min(1,d.x)); d.y=Math.max(-1,Math.min(1,d.y));});
+}
+
+/* =========================================================
+   3. 3D 通用工具：发光贴图、文字精灵、轨道相机
+   ========================================================= */
+const glowTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
+  const gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.2,'rgba(255,255,255,.75)');
+  gr.addColorStop(.5,'rgba(255,255,255,.18)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr; g.fillRect(0,0,128,128); return new THREE.CanvasTexture(c); })();
+
+function textSprite(txt,color){
+  const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d');
+  g.font='600 50px "PingFang SC","Microsoft YaHei",sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.shadowColor=color; g.shadowBlur=16; g.fillStyle=color; g.fillText(txt,256,64);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
+  s.scale.set(3.4,.85,1); return s;
+}
+function stars(scene,n,spread){
+  const g=new THREE.BufferGeometry(), p=new Float32Array(n*3);
+  for(let i=0;i<n*3;i++) p[i]=(Math.random()-.5)*spread;
+  g.setAttribute('position',new THREE.BufferAttribute(p,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.06,color:0x7f8fff,transparent:true,opacity:.6})));
+}
+function setupView(canvas,opts){
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  const scene=new THREE.Scene(); scene.fog=new THREE.FogExp2(0x04050d,.028);
+  const cam=new THREE.PerspectiveCamera(45,1,.1,200);
+  const o={r:opts.r,th:opts.th,ph:opts.ph,drag:false,lx:0,ly:0,idle:-9,target:new THREE.Vector3(...(opts.target||[0,0,0]))};
+  canvas.addEventListener('pointerdown',e=>{o.drag=true;o.lx=e.clientX;o.ly=e.clientY;canvas.setPointerCapture(e.pointerId);});
+  canvas.addEventListener('pointermove',e=>{ if(!o.drag)return; o.th-=(e.clientX-o.lx)*.008;
+    o.ph=Math.max(.15,Math.min(1.5,o.ph-(e.clientY-o.ly)*.006)); o.lx=e.clientX;o.ly=e.clientY; o.idle=now; });
+  canvas.addEventListener('pointerup',()=>{o.drag=false;o.idle=now;});
+  canvas.addEventListener('wheel',e=>{e.preventDefault(); o.r=Math.max(opts.r*.45,Math.min(opts.r*1.8,o.r*(1+e.deltaY*.001))); o.idle=now;},{passive:false});
+  const resize=()=>{ const w=canvas.clientWidth,h=canvas.clientHeight; if(!w||!h)return;
+    renderer.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix(); };
+  new ResizeObserver(resize).observe(canvas); resize();
+  return {renderer,scene,cam,update(dt){
+    if(!o.drag && now-o.idle>2.5) o.th+=dt*opts.spin;
+    const t=o.target; cam.position.set(t.x+o.r*Math.sin(o.ph)*Math.sin(o.th), t.y+o.r*Math.cos(o.ph), t.z+o.r*Math.sin(o.ph)*Math.cos(o.th));
+    cam.lookAt(t); renderer.render(scene,cam); }};
+}
+let now=0;
+
+/* =========================================================
+   4. 神经网络 3D 视图
+   ========================================================= */
+const NV=setupView(document.getElementById('net'),{r:17,th:.55,ph:1.2,spin:.12});
+stars(NV.scene,900,70);
+let netGroup=null, neurons=[], linkGeo=null, links=[], pulseGeo=null, pulses=[];
+const MAXP=520;
+const CYAN=new THREE.Color(0x22e4ff), MAG=new THREE.Color(0xff3bbd);
+
+function buildNetViz(){
+  if(netGroup){ NV.scene.remove(netGroup); netGroup.traverse(o=>{o.geometry&&o.geometry.dispose(); o.material&&o.material.dispose();}); }
+  netGroup=new THREE.Group(); NV.scene.add(netGroup);
+  const sizes=net.sizes, L=sizes.length; neurons=[];
+  const sph=new THREE.SphereGeometry(.17,20,14);
+  sizes.forEach((n,l)=>{
+    const x=(l-(L-1)/2)*3.8, layer=[];
+    for(let i=0;i<n;i++){
+      let p;
+      if(n<=2) p=new THREE.Vector3(x,(i-(n-1)/2)*1.8,0);
+      else { const a=i/n*Math.PI*2, r=1.3+n*.07; p=new THREE.Vector3(x,r*Math.cos(a),r*Math.sin(a)); }
+      const core=new THREE.Mesh(sph,new THREE.MeshBasicMaterial({color:0xffffff}));
+      core.position.copy(p);
+      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0x22e4ff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+      glow.position.copy(p); glow.scale.setScalar(1);
+      netGroup.add(core,glow); layer.push({p,core,glow,v:0});
+    }
+    neurons.push(layer);
+    const names=['输入层 (x, y)','隐藏层 ①','隐藏层 ②','输出层 P'];
+    const lab=textSprite(names[l]||'层'+l, l===0||l===L-1?'#22e4ff':'#b9a6ff');
+    lab.position.set(x,-(n<=2?2.4:1.3+n*.07+1.1),0); netGroup.add(lab);
+  });
+  // 连线
+  links=[];
+  for(let l=0;l<L-1;l++) for(let i=0;i<sizes[l+1];i++) for(let j=0;j<sizes[l];j++) links.push({l,i,j});
+  const pos=new Float32Array(links.length*6), col=new Float32Array(links.length*6);
+  links.forEach((k,s)=>{ const a=neurons[k.l][k.j].p, b=neurons[k.l+1][k.i].p;
+    pos.set([a.x,a.y,a.z,b.x,b.y,b.z],s*6); });
+  linkGeo=new THREE.BufferGeometry();
+  linkGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  linkGeo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  netGroup.add(new THREE.LineSegments(linkGeo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})));
+  // 脉冲粒子
+  pulseGeo=new THREE.BufferGeometry();
+  pulseGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(MAXP*3),3));
+  pulseGeo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(MAXP*3),3));
+  netGroup.add(new THREE.Points(pulseGeo,new THREE.PointsMaterial({size:.5,map:glowTex,vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})));
+  pulses=[];
+  document.getElementById('arch').textContent='神经网络结构 · '+sizes.join(' → ');
+  const pc=net.W.reduce((s,w)=>s+w.length,0)+net.b.reduce((s,v)=>s+v.length,0);
+  document.getElementById('params').textContent=pc+' 个可学习参数';
+}
+
+// 推理演示：选一个样本，让信号一层层流过网络
+let sample=null, sampleActs=null, sampleT=-99;
+const HOP=.5;
+function newSample(){
+  if(!data.length){ sample=null; return; }
+  sample=data[Math.floor(Math.random()*data.length)];
+  sampleActs=forward(sample.x,sample.y); sampleT=now; pulses=[];
+  const {sizes,W}=net;
+  for(let l=0;l<sizes.length-1;l++){
+    const m=sizes[l], cand=[];
+    for(let i=0;i<sizes[l+1];i++) for(let j=0;j<m;j++){ const f=W[l][i*m+j]*sampleActs[l][j]; cand.push({l,i,j,f}); }
+    cand.sort((a,b)=>Math.abs(b.f)-Math.abs(a.f));
+    cand.slice(0,Math.min(cand.length,60)).forEach(c=>{
+      for(let k=0;k<2;k++) pulses.push({...c,start:l*HOP+k*.18+Math.random()*.08,dur:HOP*.9,mag:Math.min(1,Math.abs(c.f)*1.3)});
+    });
+  }
+  pulses=pulses.slice(0,MAXP);
+  const p=sampleActs[sizes.length-1][0], right=(p>.5)===(sample.c===1);
+  document.getElementById('infer').innerHTML=
+    `推理样本 (${sample.x.toFixed(2)}, ${sample.y.toFixed(2)}) → P(青色) = <b style="color:${p>.5?'#22e4ff':'#ff3bbd'}">${(p*100).toFixed(1)}%</b> ${right?'✓ 判断正确':'✗ 还在学'}`;
+}
+
+const tmpC=new THREE.Color();
+function updateNetViz(){
+  const {sizes,W}=net, L=sizes.length, el=now-sampleT;
+  // 神经元亮度 = 激活值
+  neurons.forEach((layer,l)=>layer.forEach((nr,i)=>{
+    let target=nr.v;
+    if(sampleActs && el>=l*HOP){ const a=sampleActs[l][i]; target= l===L-1 ? a*2-1 : a; }
+    nr.v+= (target-nr.v)*.12;
+    const v=nr.v, m=Math.min(1,Math.abs(v));
+    tmpC.copy(v>=0?CYAN:MAG);
+    nr.glow.material.color.copy(tmpC); nr.glow.material.opacity=.25+.75*m;
+    nr.glow.scale.setScalar(.7+m*1.9);
+    nr.core.material.color.copy(tmpC).lerp(new THREE.Color(1,1,1),.55-.35*m);
+  }));
+  // 连线颜色 = 权重正负，亮度 = |权重| + 当前信号流
+  const col=linkGeo.attributes.color.array;
+  links.forEach((k,s)=>{
+    const m=sizes[k.l], w=W[k.l][k.i*m+k.j];
+    let flow=0; if(sampleActs && el>=k.l*HOP) flow=Math.abs(w*sampleActs[k.l][k.j]);
+    const br=.05+.38*Math.tanh(Math.abs(w)*.7)+.55*Math.tanh(flow);
+    const c=w>=0?CYAN:MAG;
+    col[s*6]=col[s*6+3]=c.r*br; col[s*6+1]=col[s*6+4]=c.g*br; col[s*6+2]=col[s*6+5]=c.b*br;
+  });
+  linkGeo.attributes.color.needsUpdate=true;
+  // 脉冲
+  const pp=pulseGeo.attributes.position.array, pc=pulseGeo.attributes.color.array;
+  pc.fill(0);
+  pulses.forEach((q,n)=>{
+    const t=(el-q.start)/q.dur; if(t<0||t>1) return;
+    const a=neurons[q.l][q.j].p, b=neurons[q.l+1][q.i].p, e=t*t*(3-2*t);
+    pp[n*3]=a.x+(b.x-a.x)*e; pp[n*3+1]=a.y+(b.y-a.y)*e; pp[n*3+2]=a.z+(b.z-a.z)*e;
+    const c=q.f>=0?CYAN:MAG, k=Math.sin(Math.PI*t)*(.35+.65*q.mag);
+    pc[n*3]=c.r*k; pc[n*3+1]=c.g*k; pc[n*3+2]=c.b*k;
+  });
+  pulseGeo.attributes.position.needsUpdate=true; pulseGeo.attributes.color.needsUpdate=true;
+  netGroup.rotation.x=Math.sin(now*.3)*.03;
+}
+
+/* =========================================================
+   5. 决策曲面 3D 视图
+   ========================================================= */
+const SV=setupView(document.getElementById('surf'),{r:13,th:.7,ph:.95,spin:.1,target:[0,-.3,0]});
+stars(SV.scene,700,60);
+SV.scene.add(new THREE.AmbientLight(0x6070a0,.7));
+const l1=new THREE.PointLight(0x22e4ff,1.4,40); l1.position.set(6,8,6); SV.scene.add(l1);
+const l2=new THREE.PointLight(0xff3bbd,1.2,40); l2.position.set(-6,6,-6); SV.scene.add(l2);
+const dl=new THREE.DirectionalLight(0xffffff,.5); dl.position.set(0,10,3); SV.scene.add(dl);
+
+const S=4, RES=44, HS=2.6;
+const surfGeo=new THREE.PlaneGeometry(S*2,S*2,RES,RES); surfGeo.rotateX(-Math.PI/2);
+surfGeo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(surfGeo.attributes.position.count*3),3));
+SV.scene.add(new THREE.Mesh(surfGeo,new THREE.MeshPhongMaterial({vertexColors:true,side:THREE.DoubleSide,shininess:80,transparent:true,opacity:.92})));
+SV.scene.add(new THREE.Mesh(surfGeo,new THREE.MeshBasicMaterial({wireframe:true,color:0x88bbff,transparent:true,opacity:.13,blending:THREE.AdditiveBlending,depthWrite:false})));
+// 0.5 判决平面
+const judge=new THREE.Mesh(new THREE.PlaneGeometry(S*2,S*2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.05,side:THREE.DoubleSide,depthWrite:false}));
+judge.rotation.x=-Math.PI/2; SV.scene.add(judge);
+const grid=new THREE.GridHelper(S*2,16,0x5566aa,0x223366); grid.position.y=-HS/2-.02; grid.material.transparent=true; grid.material.opacity=.35; SV.scene.add(grid);
+const lbl=textSprite('判决边界 P = 50%','#ffffff'); lbl.position.set(S+.4,.05,0); lbl.scale.set(2.6,.65,1); lbl.material.opacity=.55; SV.scene.add(lbl);
+
+const MAXD=700;
+const dots=new THREE.InstancedMesh(new THREE.SphereGeometry(.085,12,8),new THREE.MeshBasicMaterial({color:0xffffff}),MAXD);
+dots.instanceMatrix.setUsage(THREE.DynamicDrawUsage); SV.scene.add(dots);
+const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+SV.scene.add(marker);
+const beamGeo=new THREE.BufferGeometry(); beamGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));
+const beam=new THREE.Line(beamGeo,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.6,blending:THREE.AdditiveBlending}));
+SV.scene.add(beam);
+
+const DEEP=new THREE.Color(.06,.07,.2);
+function colorFor(p,out){ if(p>.5) out.copy(DEEP).lerp(CYAN,(p-.5)*2); else out.copy(DEEP).lerp(MAG,(.5-p)*2); return out; }
+const hOf=p=>(p-.5)*HS;
+function updateSurface(){
+  const pos=surfGeo.attributes.position.array, col=surfGeo.attributes.color.array;
+  for(let v=0;v<pos.length/3;v++){
+    const p=predict(pos[v*3]/S,-pos[v*3+2]/S);
+    pos[v*3+1]=hOf(p); colorFor(p,tmpC); col[v*3]=tmpC.r; col[v*3+1]=tmpC.g; col[v*3+2]=tmpC.b;
+  }
+  surfGeo.attributes.position.needsUpdate=true; surfGeo.attributes.color.needsUpdate=true; surfGeo.computeVertexNormals();
+  const M=new THREE.Matrix4();
+  dots.count=Math.min(data.length,MAXD);
+  for(let i=0;i<dots.count;i++){ const d=data[i], p=predict(d.x,d.y);
+    M.makeTranslation(d.x*S,hOf(p)+.12,-d.y*S); dots.setMatrixAt(i,M);
+    const wrong=(p>.5)!==(d.c===1);
+    tmpC.copy(d.c?CYAN:MAG).lerp(new THREE.Color(1,1,1), wrong?.65:.15); dots.setColorAt(i,tmpC); }
+  dots.instanceMatrix.needsUpdate=true; if(dots.instanceColor) dots.instanceColor.needsUpdate=true;
+}
+function updateMarker(){
+  if(!sample){ marker.visible=beam.visible=false; return; }
+  marker.visible=beam.visible=true;
+  const p=predict(sample.x,sample.y), x=sample.x*S, z=-sample.y*S, y=hOf(p)+.12;
+  marker.position.set(x,y,z); const pulse=1+.35*Math.sin(now*8); marker.scale.setScalar(.9*pulse);
+  marker.material.color.copy(sample.c?CYAN:MAG);
+  const b=beamGeo.attributes.position.array; b.set([x,-HS/2,z,x,y,z]); beamGeo.attributes.position.needsUpdate=true;
+}
+
+/* =========================================================
+   6. 2D 画板 + 曲线图 + 控件
+   ========================================================= */
+const pad=document.getElementById('pad'), pg=pad.getContext('2d');
+const hm=document.createElement('canvas'); hm.width=hm.height=64; const hg=hm.getContext('2d'); const hImg=hg.createImageData(64,64);
+function sizeCanvas(c){ const r=devicePixelRatio||1; c.width=c.clientWidth*r; c.height=c.clientHeight*r; }
+sizeCanvas(pad);
+function drawPad(){
+  for(let j=0;j<64;j++) for(let i=0;i<64;i++){ const p=predict(i/31.5-1,1-j/31.5); colorFor(p,tmpC);
+    const k=(j*64+i)*4; hImg.data[k]=tmpC.r*255; hImg.data[k+1]=tmpC.g*255; hImg.data[k+2]=tmpC.b*255; hImg.data[k+3]=255; }
+  hg.putImageData(hImg,0,0);
+  const w=pad.width,h=pad.height; pg.imageSmoothingEnabled=true; pg.drawImage(hm,0,0,w,h);
+  pg.strokeStyle='rgba(255,255,255,.12)'; pg.beginPath(); pg.moveTo(w/2,0); pg.lineTo(w/2,h); pg.moveTo(0,h/2); pg.lineTo(w,h/2); pg.stroke();
+  const r=3*(devicePixelRatio||1);
+  for(const d of data){ pg.beginPath(); pg.arc((d.x+1)/2*w,(1-d.y)/2*h,r,0,7);
+    pg.fillStyle=d.c?'#22e4ff':'#ff3bbd'; pg.fill(); pg.strokeStyle='rgba(255,255,255,.85)'; pg.lineWidth=1; pg.stroke(); }
+}
+let mode=1, painting=false, lastP=null;
+function addAt(e,cls){
+  const r=pad.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*2-1, y=1-(e.clientY-r.top)/r.height*2;
+  if(lastP && Math.hypot(x-lastP[0],y-lastP[1])<.07) return; lastP=[x,y];
+  if(data.length<MAXD) data.push({x,y,c:cls});
+  if(!training) togglePlay();
+}
+pad.addEventListener('contextmenu',e=>e.preventDefault());
+pad.addEventListener('pointerdown',e=>{ painting=e.button===2?0:mode; painting=(e.button===2?1-mode:mode); lastP=null; addAt(e,painting); pad.setPointerCapture(e.pointerId); painting={c:painting}; });
+pad.addEventListener('pointermove',e=>{ if(painting) addAt(e,painting.c); });
+pad.addEventListener('pointerup',()=>painting=false);
+const mC=document.getElementById('mC'), mM=document.getElementById('mM');
+mC.onclick=()=>{mode=1;mC.classList.add('on');mM.classList.remove('on');};
+mM.onclick=()=>{mode=0;mM.classList.add('on');mC.classList.remove('on');};
+document.getElementById('clear').onclick=()=>{data=[];lossHist=[];sample=null;};
+
+let training=true;
+const playBtn=document.getElementById('play');
+function togglePlay(){ training=!training; playBtn.classList.toggle('on',training); playBtn.textContent=training?'⏸ 暂停训练':'▶ 开始训练'; }
+playBtn.onclick=togglePlay;
+function resetNet(){ net=makeNet([2,H,H,1]); stepCount=0; lossHist=[]; buildNetViz(); newSample(); }
+document.getElementById('reset').onclick=resetNet;
+document.querySelectorAll('#sets button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#sets button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  genSet(b.dataset.s); resetNet(); if(!training) togglePlay(); });
+const lrIn=document.getElementById('lr'); lrIn.oninput=()=>{ lr=Math.pow(10,+lrIn.value); document.getElementById('lrv').textContent=lr.toFixed(3); };
+const hidIn=document.getElementById('hid'); hidIn.onchange=hidIn.oninput=()=>{ const v=+hidIn.value; document.getElementById('hidv').textContent=v;
+  if(v!==H){ H=v; resetNet(); } };
+
+const chart=document.getElementById('chart'), cg=chart.getContext('2d');
+let lossHist=[];
+function drawChart(){
+  sizeCanvasIf(chart); const w=chart.width,h=chart.height; cg.clearRect(0,0,w,h);
+  cg.strokeStyle='rgba(120,160,255,.12)'; for(let i=1;i<4;i++){ cg.beginPath(); cg.moveTo(0,h*i/4); cg.lineTo(w,h*i/4); cg.stroke(); }
+  if(lossHist.length<2) return;
+  const mx=Math.max(.75,...lossHist);
+  const path=(arr,f,color,fill)=>{ cg.beginPath(); arr.forEach((v,i)=>{ const x=i/(arr.length-1)*w, y=h-f(v)*h*.92-2; i?cg.lineTo(x,y):cg.moveTo(x,y); });
+    cg.strokeStyle=color; cg.lineWidth=2*(devicePixelRatio||1); cg.stroke();
+    if(fill){ cg.lineTo(w,h); cg.lineTo(0,h); cg.closePath(); const gr=cg.createLinearGradient(0,0,0,h); gr.addColorStop(0,fill); gr.addColorStop(1,'transparent'); cg.fillStyle=gr; cg.fill(); } };
+  path(lossHist.map(o=>o.l),v=>v/mx,'#ff3bbd','rgba(255,59,189,.25)');
+  path(lossHist.map(o=>o.a),v=>v,'#22e4ff');
+  cg.font=`${11*(devicePixelRatio||1)}px JetBrains Mono`; cg.fillStyle='#ff3bbd'; cg.fillText('loss',8,16*(devicePixelRatio||1));
+  cg.fillStyle='#22e4ff'; cg.fillText('accuracy',60*(devicePixelRatio||1),16*(devicePixelRatio||1));
+}
+function sizeCanvasIf(c){ const r=devicePixelRatio||1; if(c.width!==Math.round(c.clientWidth*r)) sizeCanvas(c); }
+
+/* =========================================================
+   7. 主循环
+   ========================================================= */
+genSet('spiral'); resetNet();
+let frame=0, last=performance.now();
+function loop(t){
+  const dt=Math.min(.05,(t-last)/1000); last=t; now=t/1000; frame++;
+  if(training && data.length){
+    let r; for(let k=0;k<3;k++){ r=trainStep(); stepCount++; }
+    if(frame%2===0){ lossHist.push({l:r.loss,a:r.acc}); if(lossHist.length>400) lossHist.shift(); }
+    document.getElementById('ep').textContent=stepCount;
+    document.getElementById('acc').textContent=(r.acc*100).toFixed(1)+'%';
+    document.getElementById('loss').textContent=r.loss.toFixed(3);
+  }
+  document.getElementById('cnt').textContent=data.length;
+  if(now-sampleT>HOP*(net.sizes.length-1)+1.1) newSample();
+  if(frame%2===0) updateSurface();
+  if(frame%4===0){ drawPad(); drawChart(); }
+  updateMarker(); updateNetViz();
+  NV.update(dt); SV.update(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
